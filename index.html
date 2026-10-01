@@ -1,0 +1,460 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Captura guiada y análisis 4Q de tiempos muertos de producción.">
+  <meta name="theme-color" content="#101b16">
+  <title>Flex | Downtime Control</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='15' fill='%23101b16'/%3E%3Cpath d='M14 34h11l5-13 8 25 5-12h7' fill='none' stroke='%2300a651' stroke-width='6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="Navegación principal">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true"><span></span></div>
+        <div>
+          <strong>flex</strong>
+          <small>Downtime</small>
+        </div>
+      </div>
+
+      <nav class="nav-list">
+        <button class="nav-item active" type="button" data-view="capture">
+          <span class="nav-code">01</span>
+          <span>Captura</span>
+        </button>
+        <button class="nav-item" type="button" data-view="dashboard">
+          <span class="nav-code">4Q</span>
+          <span>Concentrado</span>
+        </button>
+        <button class="nav-item" type="button" data-view="analytics">
+          <span class="nav-code">05</span>
+          <span>Dashboard</span>
+        </button>
+        <button class="nav-item" type="button" data-view="records">
+          <span class="nav-code">03</span>
+          <span>Registros</span>
+        </button>
+        <button class="nav-item" type="button" data-view="catalogs">
+          <span class="nav-code">04</span>
+          <span>Catálogos</span>
+        </button>
+      </nav>
+
+      <div class="storage-card">
+        <div class="status-line"><span class="status-dot"></span> Datos locales</div>
+        <p>La información se guarda únicamente en este navegador.</p>
+        <button class="link-button" id="backupShortcut" type="button">Crear respaldo JSON</button>
+      </div>
+    </aside>
+
+    <main class="main-content">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow" id="viewEyebrow">OPERACIÓN / CAPTURA</p>
+          <h1 id="viewTitle">Nuevo evento de tiempo muerto</h1>
+        </div>
+        <div class="topbar-actions">
+          <div class="today-block">
+            <span>Hoy</span>
+            <strong id="todayLabel">—</strong>
+          </div>
+          <button class="icon-button" id="goDashboard" type="button" title="Abrir concentrado 4Q" aria-label="Abrir concentrado 4Q">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z"/></svg>
+          </button>
+        </div>
+      </header>
+
+      <section class="view active" id="view-capture" data-view-panel="capture">
+        <div class="capture-layout">
+          <form id="downtimeForm" class="panel capture-panel" novalidate>
+            <div class="panel-header">
+              <div>
+                <span class="section-number">01</span>
+                <div>
+                  <h2>Ubicación del evento</h2>
+                  <p>Selecciona en orden para acotar línea, área y equipo.</p>
+                </div>
+              </div>
+              <span class="required-note">* Obligatorio</span>
+            </div>
+
+            <div class="form-grid five-columns">
+              <label class="field">
+                <span>Fecha *</span>
+                <input id="eventDate" name="date" type="date" required>
+              </label>
+              <label class="field">
+                <span>Turno *</span>
+                <select id="shift" name="shift" required>
+                  <option value="">Seleccionar</option>
+                  <option value="1">Turno 1</option>
+                  <option value="2">Turno 2</option>
+                  <option value="3">Turno 3</option>
+                </select>
+              </label>
+              <label class="field">
+                <span>Línea *</span>
+                <select id="line" name="line" required></select>
+              </label>
+              <label class="field">
+                <span>Área *</span>
+                <select id="area" name="area" required disabled></select>
+              </label>
+              <label class="field">
+                <span>Departamento *</span>
+                <select id="department" name="department" required></select>
+              </label>
+            </div>
+
+            <div class="section-divider"></div>
+
+            <div class="panel-header compact">
+              <div>
+                <span class="section-number">02</span>
+                <div>
+                  <h2>Diagnóstico guiado</h2>
+                  <p>El árbol muestra únicamente opciones compatibles con el equipo.</p>
+                </div>
+              </div>
+            </div>
+
+            <div class="form-grid three-columns">
+              <label class="field">
+                <span>Máquina *</span>
+                <select id="machine" name="machine" required disabled></select>
+              </label>
+              <label class="field">
+                <span>Problema *</span>
+                <select id="problem" name="problem" required disabled></select>
+              </label>
+              <label class="field">
+                <span>Causa raíz *</span>
+                <select id="rootCause" name="rootCause" required disabled></select>
+              </label>
+            </div>
+
+            <div class="custom-row hidden" id="customProblemRow">
+              <label class="field">
+                <span>Describe el problema *</span>
+                <input id="customProblem" type="text" maxlength="120" placeholder="Ej. La tarjeta entra, pero no valida fiduciales">
+              </label>
+            </div>
+            <div class="custom-row hidden" id="customCauseRow">
+              <label class="field">
+                <span>Describe la causa o condición encontrada *</span>
+                <input id="customRootCause" type="text" maxlength="180" placeholder="Si aún no se conoce, escribe Pendiente de análisis">
+              </label>
+            </div>
+
+            <div class="section-divider"></div>
+
+            <div class="panel-header compact">
+              <div>
+                <span class="section-number">03</span>
+                <div>
+                  <h2>Impacto y soporte</h2>
+                  <p>Captura números reales; el tablero los suma automáticamente.</p>
+                </div>
+              </div>
+            </div>
+
+            <div class="form-grid three-columns">
+              <label class="field">
+                <span>Tiempo afectado (min) *</span>
+                <input id="minutes" name="minutes" type="number" min="1" max="1440" step="1" inputmode="numeric" placeholder="0" required>
+              </label>
+              <label class="field">
+                <span>Unidades afectadas *</span>
+                <input id="units" name="units" type="number" min="0" step="1" inputmode="numeric" placeholder="0" required>
+              </label>
+              <label class="field">
+                <span>Nombre de soporte *</span>
+                <select id="support" name="support" required></select>
+              </label>
+            </div>
+
+            <div class="section-divider"></div>
+
+            <div class="panel-header compact">
+              <div>
+                <span class="section-number">04</span>
+                <div>
+                  <h2>Respuesta al evento</h2>
+                  <p>Las acciones se sugieren desde el catálogo y permanecen editables.</p>
+                </div>
+              </div>
+            </div>
+
+            <div class="action-grid">
+              <label class="field action-field">
+                <span><b>C</b> Acción de contención *</span>
+                <textarea id="containment" name="containment" rows="3" maxlength="500" required></textarea>
+              </label>
+              <label class="field action-field">
+                <span><b>CA</b> Acción correctiva *</span>
+                <textarea id="corrective" name="corrective" rows="3" maxlength="500" required></textarea>
+              </label>
+              <label class="field action-field">
+                <span><b>S</b> Acción sistemática *</span>
+                <textarea id="systematic" name="systematic" rows="3" maxlength="500" required></textarea>
+              </label>
+            </div>
+
+            <div class="form-footer">
+              <div class="validation-message" id="formStatus" role="status">Completa los campos en orden.</div>
+              <div class="footer-actions">
+                <button class="button secondary hidden" id="cancelEdit" type="button">Cancelar edición</button>
+                <button class="button ghost" id="clearForm" type="button">Limpiar</button>
+                <button class="button primary" id="saveRecord" type="submit">Guardar registro</button>
+              </div>
+            </div>
+          </form>
+
+          <aside class="capture-aside">
+            <section class="panel decision-panel">
+              <div class="mini-heading">
+                <span>ÁRBOL ACTIVO</span>
+                <span class="live-indicator">EN VIVO</span>
+              </div>
+              <ol class="decision-path" id="decisionPath">
+                <li data-path="line"><span>1</span><div><small>Línea</small><strong>Sin seleccionar</strong></div></li>
+                <li data-path="area"><span>2</span><div><small>Área</small><strong>Esperando línea</strong></div></li>
+                <li data-path="machine"><span>3</span><div><small>Máquina</small><strong>Esperando área</strong></div></li>
+                <li data-path="problem"><span>4</span><div><small>Problema</small><strong>Esperando máquina</strong></div></li>
+                <li data-path="rootCause"><span>5</span><div><small>Causa</small><strong>Esperando problema</strong></div></li>
+              </ol>
+            </section>
+
+            <section class="panel quick-summary">
+              <div class="mini-heading"><span>RESUMEN DE HOY</span></div>
+              <div class="summary-metric"><span>Eventos</span><strong id="todayEvents">0</strong></div>
+              <div class="summary-metric"><span>Minutos caídos</span><strong id="todayMinutes">0</strong></div>
+              <div class="summary-metric"><span>Unidades afectadas</span><strong id="todayUnits">0</strong></div>
+              <button class="button secondary full" id="viewToday" type="button">Ver concentrado</button>
+            </section>
+
+            <section class="tip-card">
+              <span class="tip-index">TIP</span>
+              <p>Si una falla no aparece, elige <strong>Otro / no catalogado</strong>. Después puedes convertirla en una regla desde Catálogos.</p>
+            </section>
+          </aside>
+        </div>
+      </section>
+
+      <section class="view" id="view-dashboard" data-view-panel="dashboard">
+        <div class="dashboard-toolbar panel">
+          <div class="filter-grid">
+            <label class="field small"><span>Desde</span><input id="filterFrom" type="date"></label>
+            <label class="field small"><span>Hasta</span><input id="filterTo" type="date"></label>
+            <label class="field small"><span>Turno</span><select id="filterShift"><option value="">Todos</option><option value="1">Turno 1</option><option value="2">Turno 2</option><option value="3">Turno 3</option></select></label>
+            <label class="field small"><span>Línea</span><select id="filterLine"></select></label>
+            <label class="field small"><span>Área</span><select id="filterArea"></select></label>
+            <label class="field small"><span>Métrica</span><select id="dashboardMetric"><option value="minutes">Minutos</option><option value="events">Eventos</option><option value="units">Unidades</option></select></label>
+          </div>
+          <button class="button ghost" id="resetFilters" type="button">Restablecer</button>
+        </div>
+
+        <div class="kpi-grid" id="kpiGrid">
+          <article class="kpi-card accent-cyan"><span>Tiempo caído</span><strong id="kpiMinutes">0 min</strong><small id="kpiHours">0.0 h acumuladas</small></article>
+          <article class="kpi-card accent-violet"><span>Eventos</span><strong id="kpiEvents">0</strong><small id="kpiAverage">0 min por evento</small></article>
+          <article class="kpi-card accent-orange"><span>Unidades afectadas</span><strong id="kpiUnits">0</strong><small id="kpiUnitRate">0 por evento</small></article>
+          <article class="kpi-card accent-blue"><span>Área con mayor impacto</span><strong id="kpiTopArea">—</strong><small id="kpiTopAreaValue">Sin registros</small></article>
+        </div>
+
+        <div class="quadrant-grid">
+          <article class="panel quadrant-card" id="q1">
+            <header class="quadrant-header">
+              <div><span class="quadrant-code">Q1</span><h2>Tiempo caído por semana</h2></div>
+              <span class="chart-caption" id="q1Caption">Minutos por semana</span>
+            </header>
+            <div class="chart-body weekly-chart" id="locationBars"></div>
+          </article>
+
+          <article class="panel quadrant-card" id="q2">
+            <header class="quadrant-header">
+              <div><span class="quadrant-code">Q2</span><h2>Pareto de fallas</h2></div>
+              <select class="inline-select" id="q2Group" aria-label="Agrupar Pareto"><option value="machine">Máquina</option><option value="problem">Problema</option><option value="rootCause">Causa raíz</option></select>
+            </header>
+            <div class="chart-body vertical-pareto" id="problemPareto"></div>
+          </article>
+
+          <article class="panel quadrant-card" id="q3">
+            <header class="quadrant-header">
+              <div><span class="quadrant-code">Q3</span><h2>Tiempo por categoría y semana</h2></div>
+              <select class="inline-select" id="q3Group" aria-label="Categoría de la tabla"><option value="machine">Máquina</option><option value="problem">Problema</option><option value="rootCause">Causa raíz</option></select>
+            </header>
+            <div class="chart-body weekly-matrix" id="trendChart"></div>
+          </article>
+
+          <article class="panel quadrant-card" id="q4">
+            <header class="quadrant-header">
+              <div><span class="quadrant-code">Q4</span><h2>Acciones en seguimiento</h2></div>
+              <select class="inline-select" id="q4StatusFilter" aria-label="Filtrar acciones"><option value="pending">Pendientes</option><option value="completed">Completadas</option><option value="all">Todas</option></select>
+            </header>
+            <div class="chart-body priority-list action-followup-list" id="priorityList"></div>
+          </article>
+        </div>
+
+        <div class="dashboard-footer">
+          <span id="dashboardScope">Mostrando todos los registros</span>
+          <button class="button secondary" id="exportDashboardCsv" type="button">Exportar datos filtrados</button>
+        </div>
+      </section>
+
+      <section class="view" id="view-analytics" data-view-panel="analytics">
+        <div class="analytics-toolbar panel">
+          <div class="analytics-filter-grid">
+            <label class="field small"><span>Desde</span><input id="analyticsFrom" type="date"></label>
+            <label class="field small"><span>Hasta</span><input id="analyticsTo" type="date"></label>
+            <label class="field small"><span>Turno</span><select id="analyticsShift"><option value="">Todos</option><option value="1">Turno 1</option><option value="2">Turno 2</option><option value="3">Turno 3</option></select></label>
+            <label class="field small"><span>Línea</span><select id="analyticsLine"></select></label>
+            <label class="field small"><span>Área</span><select id="analyticsArea"></select></label>
+            <label class="field small"><span>Métrica</span><select id="analyticsMetric"><option value="minutes">Minutos</option><option value="events">Eventos</option><option value="units">Unidades</option></select></label>
+          </div>
+          <button class="button ghost" id="resetAnalyticsFilters" type="button">Restablecer</button>
+        </div>
+
+        <div class="kpi-grid analytics-kpis">
+          <article class="kpi-card accent-cyan"><span>Tiempo caído</span><strong id="analyticsMinutes">0 min</strong><small>Acumulado en el periodo</small></article>
+          <article class="kpi-card accent-violet"><span>Eventos</span><strong id="analyticsEvents">0</strong><small>En el alcance seleccionado</small></article>
+          <article class="kpi-card accent-orange"><span>Unidades afectadas</span><strong id="analyticsUnits">0</strong><small>Total en el periodo</small></article>
+          <article class="kpi-card accent-blue"><span>Problema de mayor impacto</span><strong id="analyticsTopProblem">—</strong><small id="analyticsTopProblemValue">Sin registros</small></article>
+        </div>
+
+        <div class="analytics-grid">
+          <article class="panel analytics-card"><header><span class="quadrant-code">A</span><h2>Tiempo por problema</h2></header><div class="analytics-chart-scroll" id="analyticsProblemChart"></div></article>
+          <article class="panel analytics-card"><header><span class="quadrant-code">B</span><h2>Tiempo por causa raíz</h2></header><div class="analytics-chart-scroll" id="analyticsRootCauseChart"></div></article>
+          <article class="panel analytics-card"><header><span class="quadrant-code">C</span><h2>Tiempo por máquina</h2></header><div class="analytics-chart-scroll" id="analyticsMachineChart"></div></article>
+          <article class="panel analytics-card"><header><span class="quadrant-code">D</span><h2>Tiempo por línea</h2></header><div class="analytics-chart-scroll" id="analyticsLineChart"></div></article>
+          <article class="panel analytics-card"><header><span class="quadrant-code">E</span><h2>Tiempo por turno</h2></header><div class="analytics-chart-scroll" id="analyticsShiftChart"></div></article>
+        </div>
+        <div class="dashboard-footer"><span id="analyticsScope">Mostrando todos los registros</span><button class="button secondary" id="exportAnalyticsCsv" type="button">Exportar datos filtrados</button></div>
+      </section>
+
+      <section class="view" id="view-records" data-view-panel="records">
+        <div class="records-toolbar panel">
+          <label class="search-box">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m21 21-4.5-4.5m2.5-5A7.5 7.5 0 1 1 4 11.5a7.5 7.5 0 0 1 15 0Z"/></svg>
+            <input id="recordSearch" type="search" placeholder="Buscar línea, máquina, problema o soporte">
+          </label>
+          <div class="records-actions">
+            <input id="importJsonInput" type="file" accept="application/json,.json" hidden>
+            <input id="importExcelInput" type="file" accept=".xlsx,.xls" hidden>
+            <button class="button secondary" id="exportExcelTemplate" type="button">Plantilla Excel</button>
+            <button class="button ghost" id="importExcel" type="button">Importar Excel</button>
+            <button class="button ghost" id="importJson" type="button">Importar JSON</button>
+            <button class="button secondary" id="exportJson" type="button">Respaldo JSON</button>
+            <button class="button primary" id="exportCsv" type="button">CSV para Power BI</button>
+          </div>
+        </div>
+
+        <div class="panel table-panel">
+          <div class="table-summary">
+            <div><strong id="recordCount">0 registros</strong><span id="recordSummary">—</span></div>
+            <button class="danger-link" id="deleteAll" type="button">Eliminar todos</button>
+          </div>
+          <div class="table-scroll">
+            <table class="data-table">
+              <thead>
+                <tr><th>Fecha</th><th>Turno</th><th>Línea</th><th>Área</th><th>Máquina</th><th>Problema</th><th>Min</th><th>Unid.</th><th>Soporte</th><th aria-label="Acciones"></th></tr>
+              </thead>
+              <tbody id="recordsBody"></tbody>
+            </table>
+          </div>
+          <div class="empty-state hidden" id="recordsEmpty">
+            <strong>No hay coincidencias</strong>
+            <p>Ajusta la búsqueda o registra un nuevo evento.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="view" id="view-catalogs" data-view-panel="catalogs">
+        <div class="catalog-intro panel">
+          <div>
+            <span class="eyebrow">CONFIGURACIÓN SIN CÓDIGO</span>
+            <h2>Edita los árboles de decisión</h2>
+            <p>Los cambios se aplican de inmediato a la captura y quedan incluidos en el respaldo JSON.</p>
+          </div>
+          <button class="button ghost" id="restoreCatalogs" type="button">Restaurar catálogos iniciales</button>
+        </div>
+
+        <div class="catalog-grid">
+          <section class="panel catalog-card wide">
+            <header><div><span class="catalog-tag">ÁRBOL 1</span><h3>Ubicaciones y equipos</h3></div><span id="locationCount" class="count-badge">0</span></header>
+            <form id="locationForm" class="catalog-form location-form">
+              <input id="catalogLine" type="text" placeholder="Línea" maxlength="40" required>
+              <input id="catalogArea" type="text" placeholder="Área" maxlength="60" required>
+              <input id="catalogMachine" type="text" placeholder="Máquina" maxlength="60" required>
+              <button class="button secondary" type="submit">Agregar</button>
+            </form>
+            <div class="catalog-list" id="locationList"></div>
+          </section>
+
+          <section class="panel catalog-card">
+            <header><div><span class="catalog-tag">LISTA</span><h3>Departamentos</h3></div><span id="departmentCount" class="count-badge">0</span></header>
+            <form id="departmentForm" class="catalog-form compact-form">
+              <input id="catalogDepartment" type="text" placeholder="Nuevo departamento" maxlength="80" required>
+              <button class="button secondary" type="submit">Agregar</button>
+            </form>
+            <div class="chip-list" id="departmentList"></div>
+          </section>
+
+          <section class="panel catalog-card">
+            <header><div><span class="catalog-tag">LISTA</span><h3>Personal de soporte</h3></div><span id="supportCount" class="count-badge">0</span></header>
+            <form id="supportForm" class="catalog-form compact-form">
+              <input id="catalogSupport" type="text" placeholder="Nombre o equipo" maxlength="80" required>
+              <button class="button secondary" type="submit">Agregar</button>
+            </form>
+            <div class="chip-list" id="supportList"></div>
+          </section>
+
+          <section class="panel catalog-card full-width">
+            <header><div><span class="catalog-tag">ÁRBOL 2</span><h3>Fallas, causas y respuestas</h3></div><span id="failureCount" class="count-badge">0</span></header>
+            <form id="failureForm" class="failure-form">
+              <div class="form-grid three-columns">
+                <label class="field"><span>Máquina o familia *</span><input id="failureMachine" type="text" list="machineSuggestions" placeholder="Ej. Camalot o TODAS" required></label>
+                <label class="field"><span>Problema *</span><input id="failureProblem" type="text" maxlength="120" required></label>
+                <label class="field"><span>Causa raíz *</span><input id="failureCause" type="text" maxlength="180" required></label>
+              </div>
+              <datalist id="machineSuggestions"></datalist>
+              <div class="form-grid three-columns">
+                <label class="field"><span>Contención *</span><textarea id="failureContainment" rows="2" required></textarea></label>
+                <label class="field"><span>Correctiva *</span><textarea id="failureCorrective" rows="2" required></textarea></label>
+                <label class="field"><span>Sistemática *</span><textarea id="failureSystematic" rows="2" required></textarea></label>
+              </div>
+              <div class="catalog-submit-row"><button class="button secondary" type="submit">Agregar regla</button></div>
+            </form>
+            <div class="failure-table-wrap">
+              <table class="data-table compact-table">
+                <thead><tr><th>Máquina</th><th>Problema</th><th>Causa raíz</th><th aria-label="Eliminar"></th></tr></thead>
+                <tbody id="failureList"></tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div class="toast-stack" id="toastStack" aria-live="polite"></div>
+
+  <dialog id="confirmDialog" class="confirm-dialog">
+    <form method="dialog">
+      <div class="dialog-icon">!</div>
+      <h2 id="dialogTitle">Confirmar acción</h2>
+      <p id="dialogMessage">Esta acción no se puede deshacer.</p>
+      <div class="dialog-actions">
+        <button class="button ghost" value="cancel">Cancelar</button>
+        <button class="button danger" id="dialogConfirm" value="confirm">Confirmar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="data.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
