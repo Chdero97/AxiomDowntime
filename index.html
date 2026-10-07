@@ -1,0 +1,603 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Captura hora por hora, registra DT y analiza la productividad de producción.">
+  <meta name="theme-color" content="#005486">
+  <title>Flex | Downtime Control</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='15' fill='%23005486'/%3E%3Cpath d='M14 34h11l5-13 8 25 5-12h7' fill='none' stroke='%23009ADD' stroke-width='6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <section class="auth-gate" id="authGate" hidden>
+    <form class="auth-panel" id="authForm">
+      <span class="eyebrow">ACCESO / EQUIPO</span>
+      <h1>Downtime Control</h1>
+      <p>Ingresa con tu cuenta de Microsoft 365 para consultar y guardar información compartida.</p>
+      <label class="field"><span>Correo electrónico</span><input id="authEmail" type="email" autocomplete="email" required></label>
+      <button class="button primary" type="submit">Iniciar sesión con Microsoft</button>
+      <p class="auth-message" id="authMessage" role="status"></p>
+    </form>
+  </section>
+
+  <div class="app-shell" id="appShell">
+    <aside class="sidebar" id="appSidebar" aria-label="Navegación principal" aria-hidden="true" inert>
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true"><span></span></div>
+        <div>
+          <strong>flex</strong>
+          <small>Downtime</small>
+        </div>
+      </div>
+
+      <nav class="nav-list">
+        <button class="nav-item active" type="button" data-view="capture">
+          <span class="nav-code">01</span>
+          <span>Hora por hora</span>
+        </button>
+        <button class="nav-item" type="button" data-view="dashboard">
+          <span class="nav-code">4Q</span>
+          <span>Concentrado</span>
+        </button>
+        <button class="nav-item" type="button" data-view="analytics">
+          <span class="nav-code">05</span>
+          <span>Dashboard</span>
+        </button>
+        <button class="nav-item" type="button" data-view="records">
+          <span class="nav-code">03</span>
+          <span>Registros</span>
+        </button>
+        <button class="nav-item" type="button" data-view="catalogs">
+          <span class="nav-code">04</span>
+          <span>Catálogos</span>
+        </button>
+      </nav>
+
+      <div class="storage-card">
+        <div class="status-line"><span class="status-dot"></span><span id="storageStatus">Datos locales</span></div>
+        <p id="storageDescription">La información se guarda únicamente en este navegador; abrir la app desde SMB no comparte los datos.</p>
+        <button class="link-button" id="cloudSignOut" type="button" hidden>Cerrar sesión</button>
+      </div>
+    </aside>
+    <button class="nav-backdrop" id="navBackdrop" type="button" aria-label="Cerrar menú" hidden></button>
+
+    <main class="main-content">
+      <header class="topbar">
+        <div class="topbar-heading">
+          <button class="menu-toggle" id="menuToggle" type="button" aria-label="Abrir menú" aria-controls="appSidebar" aria-expanded="false" title="Abrir menú">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+          </button>
+          <div>
+          <p class="eyebrow" id="viewEyebrow">OPERACIÓN / CAPTURA</p>
+          <h1 id="viewTitle">Nuevo evento de tiempo muerto</h1>
+          </div>
+        </div>
+        <div class="topbar-actions">
+          <div class="today-block">
+            <span>Hoy</span>
+            <strong id="todayLabel">—</strong>
+          </div>
+          <button class="icon-button" id="goDashboard" type="button" title="Abrir concentrado 4Q" aria-label="Abrir concentrado 4Q">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z"/></svg>
+          </button>
+        </div>
+      </header>
+
+      <section class="cloud-notice" id="localMigration" hidden>
+        <div><strong>Hay registros locales que aún no están en el espacio compartido</strong><p id="localMigrationMessage"></p></div>
+        <div class="cloud-notice-actions"><button class="button secondary" id="migrateLocalData" type="button">Compartir registros locales</button><button class="button ghost" id="dismissLocalMigration" type="button">Ahora no</button></div>
+      </section>
+
+      <section class="view active" id="view-capture" data-view-panel="capture">
+        <section class="panel hourly-panel" aria-labelledby="hourlyTitle">
+          <div class="hourly-heading">
+            <div>
+              <span class="eyebrow">PRODUCCIÓN / SEGUIMIENTO POR TURNO</span>
+              <h2 id="hourlyTitle">Captura hora por hora</h2>
+              <p>Compara la producción real con el rate y justifica el tiempo únicamente con tickets de paro.</p>
+            </div>
+            <div class="hourly-heading-actions">
+              <button class="button secondary" id="openStopTicket" type="button">Captura de paro de línea</button>
+              <button class="button ghost" id="openManualDowntime" type="button">Carga manual de DT</button>
+              <button class="button primary" id="saveHourlyReport" type="button">Guardar turno</button>
+            </div>
+          </div>
+          <div class="active-tickets hidden" id="activeTickets" aria-live="polite"></div>
+          <div class="hourly-setup">
+            <label class="field"><span>Fecha del turno</span><input id="hourlyDate" type="date" required></label>
+            <label class="field"><span>Turno</span><select id="hourlyShift" required><option value="">Seleccionar</option><option value="1">Turno 1 · 07:00–15:00</option><option value="2">Turno 2 · 15:00–23:00</option><option value="3">Turno 3 · 23:00–07:00</option></select></label>
+            <label class="field"><span>Área</span><select id="hourlyArea" required></select></label>
+            <label class="field"><span>Línea</span><select id="hourlyLine" required disabled></select></label>
+            <label class="field"><span>Modelo</span><select id="hourlyModel" required disabled></select></label>
+            <div class="hourly-rate"><span>Rate objetivo</span><strong id="hourlyRate">—</strong><small>tarjetas / hora</small></div>
+          </div>
+          <div class="hourly-kpis" id="hourlyKpis" aria-live="polite">
+            <article><span>Productividad del turno</span><strong id="hourlyProductivity">—</strong><small id="hourlyUnitsSummary">Tarjetas: — / —</small></article>
+            <article><span>Tiempo caído calculado</span><strong id="hourlyDowntime">—</strong><small id="hourlyDowntimeCoverage">Tiempo equivalente al faltante contra el rate</small></article>
+            <article><span>Tiempo sin justificar</span><strong id="hourlyUnjustified">—</strong><small>Faltante no cubierto por tickets ni captura manual</small></article>
+          </div>
+          <div class="hourly-charts">
+            <section class="hourly-chart-card"><h3>Productividad por hora</h3><div id="hourlyProductivityChart" class="hourly-chart" role="img" aria-label="Gráfica de productividad por hora"></div></section>
+            <section class="hourly-chart-card"><h3>Tiempo de paro capturado y sin justificar</h3><div id="hourlyTimeChart" class="hourly-chart" role="img" aria-label="Gráfica de tiempo de paro capturado y tiempo sin justificar por hora"></div></section>
+          </div>
+          <section class="today-summary" aria-labelledby="todaySummaryTitle">
+            <h3 id="todaySummaryTitle">Resumen del día</h3>
+            <div class="today-summary-grid">
+              <article><span>Paros registrados</span><strong id="todayEvents">0</strong></article>
+              <article><span>Tiempo caído</span><strong id="todayMinutes">0 min</strong></article>
+              <article><span>Tarjetas afectadas</span><strong id="todayUnits">0</strong></article>
+            </div>
+          </section>
+          <div class="hourly-table-wrap">
+            <table class="hourly-table">
+              <thead><tr><th>Hora</th><th>Objetivo</th><th>Tarjetas reales</th><th>DT capturado (ticket/manual)</th><th>Min sin justificar</th></tr></thead>
+              <tbody id="hourlyRows"><tr><td colspan="5" class="hourly-empty">Selecciona turno, área, línea y modelo para generar sus 8 horas.</td></tr></tbody>
+            </table>
+          </div>
+          <p class="hourly-footnote">Las tarjetas reales se guardan automáticamente por fecha, turno, área, línea y modelo; puedes recuperarlas en la sección Registros. El tiempo justificado puede provenir de un ticket de paro o de una captura manual identificada para eventos no registrados a tiempo.</p>
+        </section>
+      </section>
+
+      <section class="view" id="view-dashboard" data-view-panel="dashboard">
+        <div class="dashboard-toolbar panel">
+          <div class="filter-grid">
+            <label class="field small"><span>Desde</span><input id="filterFrom" type="date"></label>
+            <label class="field small"><span>Hasta</span><input id="filterTo" type="date"></label>
+            <label class="field small"><span>Turno</span><select id="filterShift"><option value="">Todos</option><option value="1">Turno 1</option><option value="2">Turno 2</option><option value="3">Turno 3</option></select></label>
+            <label class="field small"><span>Línea</span><select id="filterLine"></select></label>
+            <label class="field small"><span>Área</span><select id="filterArea"></select></label>
+            <label class="field small"><span>Métrica</span><select id="dashboardMetric"><option value="minutes">Minutos</option><option value="events">Eventos</option><option value="units">Unidades</option></select></label>
+          </div>
+          <button class="button ghost" id="resetFilters" type="button">Restablecer</button>
+        </div>
+
+        <div class="kpi-grid five-kpis" id="kpiGrid">
+          <article class="kpi-card accent-cyan"><span>Tiempo caído</span><strong id="kpiMinutes">0 min</strong><small id="kpiHours">0.0 h acumuladas</small></article>
+          <article class="kpi-card accent-violet"><span>Eventos</span><strong id="kpiEvents">0</strong><small id="kpiAverage">0 min por evento</small></article>
+          <article class="kpi-card accent-orange"><span>Unidades afectadas</span><strong id="kpiUnits">0</strong><small id="kpiUnitRate">0 por evento</small></article>
+          <article class="kpi-card accent-green"><span>Costo estimado del tiempo caído</span><strong id="kpiCost">$0.0 K</strong><small>Considerando 43 UPH Empaque</small></article>
+          <article class="kpi-card accent-blue"><span>Área con mayor impacto</span><strong id="kpiTopArea">—</strong><small id="kpiTopAreaValue">Sin registros</small></article>
+        </div>
+
+        <article class="panel production-week-panel">
+          <header class="quadrant-header">
+            <div><span class="quadrant-code">PRODUCCIÓN</span><h2>Tarjetas corridas por turno y semana</h2></div>
+            <span class="chart-caption" id="productionWeekCaption">Filtra por área y línea</span>
+          </header>
+          <div class="production-week-chart" id="productionWeekChart" role="img" aria-label="Tarjetas producidas por turno y semana"></div>
+          <div class="shift-trend-legend" aria-label="Leyenda de turnos">
+            <span><i class="shift-color-1"></i>Turno 1</span>
+            <span><i class="shift-color-2"></i>Turno 2</span>
+            <span><i class="shift-color-3"></i>Turno 3</span>
+          </div>
+        </article>
+
+        <div class="quadrant-grid">
+          <article class="panel quadrant-card" id="q1">
+            <header class="quadrant-header">
+              <div><span class="quadrant-code">Q1</span><h2>Tiempo caído por semana</h2></div>
+              <span class="chart-caption" id="q1Caption">Minutos por semana</span>
+              <span class="goal-legend hidden" id="q1GoalLegend"><i aria-hidden="true"></i>Meta</span>
+            </header>
+            <div class="chart-body weekly-chart" id="locationBars"></div>
+          </article>
+
+          <article class="panel quadrant-card" id="q2">
+            <header class="quadrant-header">
+              <div><span class="quadrant-code">Q2</span><h2 id="q2Title">Pareto por área</h2></div>
+              <button class="button ghost pareto-mode-toggle" id="paretoModeToggle" type="button">Visualizar Pareto por departamento</button>
+            </header>
+            <nav class="pareto-breadcrumbs" id="paretoBreadcrumbs" aria-label="Niveles del Pareto"></nav>
+            <div class="chart-body vertical-pareto" id="problemPareto"></div>
+          </article>
+
+          <article class="panel quadrant-card" id="q3">
+            <header class="quadrant-header">
+              <div><span class="quadrant-code">Q3</span><h2>Tiempo por categoría y semana</h2></div>
+              <select class="inline-select" id="q3Group" aria-label="Categoría de la tabla"><option value="machine">Máquina</option><option value="problem">Problema</option><option value="rootCause">Causa raíz</option></select>
+            </header>
+            <div class="chart-body weekly-matrix" id="trendChart"></div>
+          </article>
+
+          <article class="panel quadrant-card" id="q4">
+            <header class="quadrant-header">
+              <div><span class="quadrant-code">Q4</span><h2>Acciones en seguimiento</h2></div>
+              <select class="inline-select" id="q4StatusFilter" aria-label="Filtrar acciones"><option value="pending">Pendientes</option><option value="completed">Completadas</option><option value="all">Todas</option></select>
+            </header>
+            <div class="chart-body action-followup-list" id="priorityList"></div>
+          </article>
+        </div>
+
+        <div class="dashboard-footer">
+          <span id="dashboardScope">Mostrando todos los registros</span>
+          <button class="button secondary" id="exportDashboardCsv" type="button">Exportar datos filtrados</button>
+        </div>
+      </section>
+
+      <section class="view" id="view-analytics" data-view-panel="analytics">
+        <div class="analytics-toolbar panel">
+          <div class="analytics-filter-grid">
+            <label class="field small"><span>Desde</span><input id="analyticsFrom" type="date"></label>
+            <label class="field small"><span>Hasta</span><input id="analyticsTo" type="date"></label>
+            <label class="field small"><span>Turno</span><select id="analyticsShift"><option value="">Todos</option><option value="1">Turno 1</option><option value="2">Turno 2</option><option value="3">Turno 3</option></select></label>
+            <label class="field small"><span>Línea</span><select id="analyticsLine"></select></label>
+            <label class="field small"><span>Área</span><select id="analyticsArea"></select></label>
+            <label class="field small"><span>Métrica</span><select id="analyticsMetric"><option value="minutes">Minutos</option><option value="events">Eventos</option><option value="units">Unidades</option></select></label>
+          </div>
+          <button class="button ghost" id="resetAnalyticsFilters" type="button">Restablecer</button>
+        </div>
+
+        <div class="kpi-grid five-kpis">
+          <article class="kpi-card accent-cyan"><span>Tiempo caído</span><strong id="analyticsMinutes">0 min</strong><small>Acumulado en el periodo</small></article>
+          <article class="kpi-card accent-violet"><span>Eventos</span><strong id="analyticsEvents">0</strong><small>En el alcance seleccionado</small></article>
+          <article class="kpi-card accent-orange"><span>Unidades afectadas</span><strong id="analyticsUnits">0</strong><small>Total en el periodo</small></article>
+          <article class="kpi-card accent-green"><span>Costo estimado del tiempo caído</span><strong id="analyticsCost">$0.00</strong><small>Considerando 43 UPH Empaque</small></article>
+          <article class="kpi-card accent-blue"><span>Problema de mayor impacto</span><strong id="analyticsTopProblem">—</strong><small id="analyticsTopProblemValue">Sin registros</small></article>
+        </div>
+
+        <article class="panel analytics-card analytics-shift-feature">
+          <header><span class="quadrant-code">E</span><h2>Tiempo por turno</h2><span class="chart-caption" id="analyticsShiftCaption">Minutos por día</span></header>
+          <div class="shift-trend-chart" id="analyticsShiftChart"></div>
+          <div class="shift-trend-legend" aria-label="Leyenda de turnos">
+            <span><i class="shift-color-1"></i>Turno 1</span>
+            <span><i class="shift-color-2"></i>Turno 2</span>
+            <span><i class="shift-color-3"></i>Turno 3</span>
+          </div>
+        </article>
+
+        <div class="analytics-grid">
+          <article class="panel analytics-card"><header><span class="quadrant-code">A</span><h2>Tiempo por problema</h2></header><div class="analytics-chart-scroll" id="analyticsProblemChart"></div></article>
+          <article class="panel analytics-card"><header><span class="quadrant-code">B</span><h2>Tiempo por causa raíz</h2></header><div class="analytics-chart-scroll" id="analyticsRootCauseChart"></div></article>
+          <article class="panel analytics-card"><header><span class="quadrant-code">C</span><h2>Tiempo por máquina</h2></header><div class="analytics-chart-scroll" id="analyticsMachineChart"></div></article>
+          <article class="panel analytics-card"><header><span class="quadrant-code">D</span><h2>Tiempo por línea</h2></header><div class="analytics-chart-scroll" id="analyticsLineChart"></div></article>
+        </div>
+        <div class="dashboard-footer"><span id="analyticsScope">Mostrando todos los registros</span><button class="button secondary" id="exportAnalyticsCsv" type="button">Exportar datos filtrados</button></div>
+      </section>
+
+      <section class="view" id="view-records" data-view-panel="records">
+        <div class="records-toolbar panel">
+          <label class="search-box">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m21 21-4.5-4.5m2.5-5A7.5 7.5 0 1 1 4 11.5a7.5 7.5 0 0 1 15 0Z"/></svg>
+            <input id="recordSearch" type="search" placeholder="Buscar línea, área, turno, modelo, problema o soporte">
+          </label>
+          <div class="records-actions">
+            <input id="importExcelInput" type="file" accept=".xlsx,.xls" hidden>
+            <input id="restoreBackupInput" type="file" accept=".json,application/json" hidden>
+            <button class="button secondary" id="exportExcelTemplate" type="button">Plantilla Excel</button>
+            <button class="button ghost" id="importExcel" type="button">Importar Excel</button>
+            <button class="button ghost" id="restoreBackup" type="button">Restaurar respaldo JSON</button>
+            <button class="button secondary" id="createBackup" type="button">Crear respaldo JSON</button>
+            <button class="button primary" id="exportCsv" type="button">CSV para Power BI</button>
+          </div>
+          <p class="catalog-help backup-help">El respaldo incluye registros, reportes por hora, catálogos y cuentas. Guárdalo en Documentos\DowntimeControl\Respaldos y selecciónalo para restaurarlo en otro navegador.</p>
+        </div>
+
+        <div class="panel table-panel">
+          <div class="table-summary">
+            <div><strong id="recordCount">0 registros</strong><span id="recordSummary">—</span></div>
+            <button class="danger-link" id="deleteAll" type="button">Eliminar todos</button>
+          </div>
+          <div class="table-scroll">
+            <table class="data-table">
+              <thead>
+                <tr><th>Fecha</th><th>Turno</th><th>Línea</th><th>Área</th><th>Máquina</th><th>Problema</th><th>Min</th><th>Unid.</th><th>Soporte</th><th aria-label="Acciones"></th></tr>
+              </thead>
+              <tbody id="recordsBody"></tbody>
+            </table>
+          </div>
+          <div class="empty-state hidden" id="recordsEmpty">
+            <strong>No hay coincidencias</strong>
+            <p>Ajusta la búsqueda o registra un nuevo evento.</p>
+          </div>
+        </div>
+        <div class="panel table-panel hourly-records-panel">
+          <div class="table-summary">
+            <div><strong id="hourlyRecordCount">0 turnos hora por hora</strong><span id="hourlyRecordSummary">Producción guardada por fecha, turno, área, línea y modelo</span></div>
+          </div>
+          <div class="table-scroll" id="hourlyRecordsScroll">
+            <table class="data-table">
+              <thead><tr><th>Fecha</th><th>Turno</th><th>Área</th><th>Línea</th><th>Modelo</th><th>DT manual</th><th>Tarjetas corridas</th><th>Objetivo</th><th>Productividad</th><th>Estado</th></tr></thead>
+              <tbody id="hourlyRecordsBody"></tbody>
+            </table>
+          </div>
+          <div class="empty-state hidden" id="hourlyRecordsEmpty">
+            <strong>No hay producción por hora guardada</strong>
+            <p>Al capturar tarjetas reales, se guardarán automáticamente y aparecerán aquí.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="view" id="view-catalogs" data-view-panel="catalogs">
+        <div class="catalog-intro panel">
+          <div>
+            <span class="eyebrow">CONFIGURACIÓN SIN CÓDIGO</span>
+            <h2>Edita los árboles de decisión</h2>
+            <p>Los cambios se aplican de inmediato a la captura y se comparten cuando la nube está configurada.</p>
+          </div>
+          <button class="button ghost" id="restoreCatalogs" type="button">Restaurar catálogos iniciales</button>
+        </div>
+
+        <div class="catalog-grid">
+          <section class="panel catalog-card wide">
+            <header><div><span class="catalog-tag">ÁRBOL 1</span><h3>Ubicaciones y equipos</h3></div><span id="locationCount" class="count-badge">0</span></header>
+            <form id="locationForm" class="catalog-form location-form">
+              <select id="catalogArea" required></select>
+              <input id="catalogLine" type="text" placeholder="Línea" maxlength="40" required>
+              <input id="catalogMachine" type="text" placeholder="Equipo" maxlength="60" required>
+              <button class="button secondary" type="submit">Agregar</button>
+            </form>
+            <div class="catalog-list" id="locationList"></div>
+          </section>
+
+          <section class="panel catalog-card wide">
+            <header><div><span class="catalog-tag">HORA POR HORA</span><h3>Modelos y rate por línea</h3></div><span id="modelCount" class="count-badge">0</span></header>
+            <form id="modelForm" class="catalog-form model-form">
+              <label class="field"><span>Área</span><select id="catalogModelArea" required></select></label>
+              <label class="field"><span>Línea</span><select id="catalogModelLine" required disabled></select></label>
+              <label class="field"><span>Modelo</span><input id="catalogModelName" type="text" maxlength="80" placeholder="Nombre del modelo" required></label>
+              <label class="field"><span>Rate (tarjetas / hora)</span><input id="catalogModelRate" type="number" min="0.01" step="any" inputmode="decimal" placeholder="0" required></label>
+              <button class="button secondary" type="submit">Agregar modelo</button>
+            </form>
+            <div class="catalog-list" id="modelList"></div>
+          </section>
+
+          <section class="panel catalog-card full-width">
+            <header><div><span class="catalog-tag">OBJETIVOS</span><h3>Metas semanales por área</h3></div><span id="goalCount" class="count-badge">0</span></header>
+            <form id="goalForm" class="catalog-form goal-form">
+              <label class="field"><span>Área</span><select id="goalArea" required></select></label>
+              <label class="field"><span>Semana</span><input id="goalWeek" type="week" required></label>
+              <label class="field"><span>Meta (minutos)</span><input id="goalMinutes" type="number" min="0" step="1" inputmode="numeric" required></label>
+              <button class="button secondary" type="submit">Agregar meta</button>
+            </form>
+            <div class="catalog-list" id="goalList"></div>
+          </section>
+
+          <section class="panel catalog-card">
+            <header><div><span class="catalog-tag">LISTA</span><h3>Departamentos</h3></div><span id="departmentCount" class="count-badge">0</span></header>
+            <form id="departmentForm" class="catalog-form compact-form">
+              <input id="catalogDepartment" type="text" placeholder="Nuevo departamento" maxlength="80" required>
+              <button class="button secondary" type="submit">Agregar</button>
+            </form>
+            <div class="chip-list" id="departmentList"></div>
+          </section>
+
+          <section class="panel catalog-card">
+            <header><div><span class="catalog-tag">LISTA</span><h3>Owners de acciones</h3></div><span id="ownerCount" class="count-badge">0</span></header>
+            <form id="ownerForm" class="catalog-form compact-form">
+              <input id="catalogOwner" type="text" placeholder="Nombre del owner" maxlength="100" required>
+              <button class="button secondary" type="submit">Agregar</button>
+            </form>
+            <div class="chip-list" id="ownerList"></div>
+          </section>
+
+          <section class="panel catalog-card full-width">
+            <header><div><span class="catalog-tag">ACCESO A TICKETS</span><h3>Usuarios operadores y soporte</h3></div><span id="ticketUserCount" class="count-badge">0</span></header>
+            <p class="catalog-help">Los operadores pueden abrir tickets. El personal de soporte puede abrirlos y cerrarlos. Las cuentas de soporte iniciales usan su nombre como usuario y el número de empleado como contraseña temporal; cada persona puede cambiarla desde el acceso a tickets.</p>
+            <form id="ticketUserForm" class="catalog-form ticket-user-form">
+              <input id="ticketUserName" type="text" placeholder="Nombre completo" maxlength="100" required>
+              <input id="ticketUsername" type="text" placeholder="Usuario o nombre completo" maxlength="100" autocomplete="username" required>
+              <input id="ticketUserPassword" type="password" placeholder="Contraseña (mínimo 8 caracteres)" minlength="8" autocomplete="new-password" required>
+              <select id="ticketUserRole" required><option value="">Tipo de usuario</option><option value="operator">Operador · abrir tickets</option><option value="support">Soporte · abrir y cerrar tickets</option></select>
+              <button class="button secondary" type="submit">Agregar usuario</button>
+            </form>
+            <div class="catalog-list" id="ticketUserList"></div>
+          </section>
+
+          <section class="panel catalog-card full-width">
+            <header><div><span class="catalog-tag">ÁRBOL 2</span><h3>Fallas, causas y respuestas</h3></div><span id="failureCount" class="count-badge">0</span></header>
+            <form id="failureForm" class="failure-form">
+              <div class="form-grid three-columns">
+                <label class="field"><span>Máquina o familia *</span><input id="failureMachine" type="text" list="machineSuggestions" placeholder="Ej. Camalot o TODAS" required></label>
+                <label class="field"><span>Problema *</span><input id="failureProblem" type="text" maxlength="120" required></label>
+                <label class="field"><span>Causa raíz *</span><input id="failureCause" type="text" maxlength="180" required></label>
+              </div>
+              <datalist id="machineSuggestions"></datalist>
+              <div class="form-grid three-columns">
+                <label class="field"><span>Contención *</span><textarea id="failureContainment" rows="2" required></textarea></label>
+                <label class="field"><span>Correctiva *</span><textarea id="failureCorrective" rows="2" required></textarea></label>
+                <label class="field"><span>Sistemática *</span><textarea id="failureSystematic" rows="2" required></textarea></label>
+              </div>
+              <div class="catalog-submit-row"><button class="button secondary" type="submit">Agregar regla</button></div>
+            </form>
+            <div class="failure-table-wrap">
+              <table class="data-table compact-table">
+                <thead><tr><th>Máquina</th><th>Problema</th><th>Causa raíz</th><th aria-label="Eliminar"></th></tr></thead>
+                <tbody id="failureList"></tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <dialog id="stopTicketDialog" class="stop-ticket-dialog" aria-labelledby="stopTicketTitle">
+    <form id="stopTicketForm" novalidate>
+      <header class="stop-ticket-header">
+        <div><span class="eyebrow">OPERACIÓN / TICKET DE PARO</span><h2 id="stopTicketTitle">Captura de paro de línea</h2></div>
+        <button class="remove-button" id="closeStopTicketDialog" type="button" aria-label="Cerrar">×</button>
+      </header>
+      <ol class="ticket-progress" aria-label="Pasos de captura">
+        <li data-ticket-progress="1">1. Ubicación</li>
+        <li data-ticket-progress="2">2. Problema</li>
+        <li data-ticket-progress="3">3. Soporte y cierre</li>
+      </ol>
+      <section class="ticket-step" data-ticket-step="1">
+        <h3>1. ¿Dónde ocurrió el paro?</h3>
+        <p>Selecciona el área, la línea y el equipo antes de continuar.</p>
+        <div class="form-grid three-columns">
+          <label class="field"><span>Área *</span><select id="ticketArea" required></select></label>
+          <label class="field"><span>Línea *</span><select id="ticketLine" required disabled></select></label>
+          <label class="field"><span>Equipo *</span><select id="ticketMachine" required disabled></select></label>
+        </div>
+        <label class="field ticket-custom-field hidden" id="ticketCustomMachineRow"><span>Especifica el equipo *</span><input id="ticketCustomMachine" type="text" maxlength="80"></label>
+      </section>
+      <section class="ticket-step hidden" data-ticket-step="2">
+        <h3>2. Problema e impacto</h3>
+        <p>Registra el defecto, las tarjetas afectadas y la acción inmediata. El cronómetro de paro comienza en este paso.</p>
+        <div class="form-grid two-columns">
+          <label class="field"><span>Defecto o problema *</span><select id="ticketProblem" required disabled></select></label>
+          <label class="field hidden" id="ticketCustomProblemRow"><span>Describe el defecto *</span><input id="ticketCustomProblem" type="text" maxlength="120"></label>
+          <label class="field"><span>Tarjetas para retrabajo *</span><input id="ticketRework" type="number" min="0" step="1" value="0" required></label>
+          <label class="field"><span>Tarjetas para scrap *</span><input id="ticketScrap" type="number" min="0" step="1" value="0" required></label>
+          <label class="field ticket-action-field"><span>Acción inmediata *</span><textarea id="ticketImmediateAction" rows="3" maxlength="500" required></textarea></label>
+        </div>
+      </section>
+      <section class="ticket-step hidden" data-ticket-step="3">
+        <h3>3. Soporte, acciones y cierre</h3>
+        <p>Valida si se requiere seguimiento por retrabajo, scrap o tiempo de paro. Asigna el departamento y completa las acciones requeridas; al cerrar, el usuario autenticado de soporte quedará registrado automáticamente.</p>
+        <div class="form-grid two-columns">
+          <label class="field"><span>Departamento que atiende *</span><select id="ticketDepartment" required></select></label>
+          <label class="field"><span>Personal de soporte *</span><input id="ticketSupport" type="text" readonly required></label>
+        </div>
+        <div class="ticket-action-requirements hidden" id="ticketActionRequirements">
+          <strong>Se requieren acciones de seguimiento</strong>
+          <p id="ticketActionReason">Completa las acciones de contención, correctiva y sistemática con owner y fecha de cierre.</p>
+          <div class="ticket-actions-grid">
+            <fieldset><legend>Acción de contención *</legend><textarea id="ticketContainment" rows="2" maxlength="500"></textarea><label class="field"><span>Fecha de cierre *</span><input id="ticketContainmentDue" type="date"></label><label class="field"><span>Owner *</span><select id="ticketContainmentOwner"><option value="">Seleccionar owner</option></select></label></fieldset>
+            <fieldset><legend>Acción correctiva *</legend><textarea id="ticketCorrective" rows="2" maxlength="500"></textarea><label class="field"><span>Fecha de cierre *</span><input id="ticketCorrectiveDue" type="date"></label><label class="field"><span>Owner *</span><select id="ticketCorrectiveOwner"><option value="">Seleccionar owner</option></select></label></fieldset>
+            <fieldset><legend>Acción sistemática *</legend><textarea id="ticketPreventive" rows="2" maxlength="500"></textarea><label class="field"><span>Fecha de cierre *</span><input id="ticketPreventiveDue" type="date"></label><label class="field"><span>Owner *</span><select id="ticketPreventiveOwner"><option value="">Seleccionar owner</option></select></label></fieldset>
+          </div>
+        </div>
+      </section>
+      <div class="ticket-running hidden" id="ticketRunning">
+        <strong id="ticketActiveSummary"></strong>
+        <span id="ticketClockStatus">TIEMPO DE IMPACTO · EN CURSO</span><strong id="ticketElapsed">00:00:00</strong><small id="ticketOpenedAt"></small>
+      </div>
+      <footer class="ticket-footer">
+        <button class="button ghost" id="ticketPrevious" type="button" hidden>Anterior</button>
+        <span id="ticketStepMessage" role="status"></span>
+        <button class="button secondary" id="ticketNext" type="button">Siguiente</button>
+        <button class="button secondary hidden" id="authenticateSupportClose" type="button">Ingresar como soporte para cerrar</button>
+        <button class="button danger hidden" id="closeStopTicket" type="button">Cerrar paro y detener cronómetro</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <dialog id="manualDowntimeDialog" class="stop-ticket-dialog manual-downtime-dialog" aria-labelledby="manualDowntimeTitle">
+    <form id="manualDowntimeForm" novalidate>
+      <header class="stop-ticket-header">
+        <div><span class="eyebrow">OPERACIÓN / REGISTRO MANUAL</span><h2 id="manualDowntimeTitle">Carga manual de DT</h2></div>
+        <button class="remove-button" id="cancelManualDowntime" type="button" aria-label="Cerrar">×</button>
+      </header>
+      <p>Completa la información como en un ticket normal y asigna el tiempo a la hora en que ocurrió.</p>
+      <div class="form-grid three-columns">
+        <label class="field"><span>Hora de producción *</span><select id="manualDowntimeHour" required></select></label>
+        <label class="field"><span>Minutos de tiempo caído *</span><input id="manualDowntimeMinutes" type="number" min="1" max="60" step="1" inputmode="numeric" required></label>
+        <label class="field"><span>Área *</span><select id="manualArea" required></select></label>
+        <label class="field"><span>Línea *</span><select id="manualLine" required disabled></select></label>
+        <label class="field"><span>Equipo *</span><select id="manualMachine" required disabled></select></label>
+      </div>
+      <label class="field hidden" id="manualCustomMachineRow"><span>Especifica el equipo *</span><input id="manualCustomMachine" type="text" maxlength="80"></label>
+      <div class="form-grid two-columns">
+        <label class="field"><span>Defecto o problema *</span><select id="manualProblem" required disabled></select></label>
+        <label class="field hidden" id="manualCustomProblemRow"><span>Describe el defecto *</span><input id="manualCustomProblem" type="text" maxlength="120"></label>
+        <label class="field"><span>Tarjetas para retrabajo *</span><input id="manualRework" type="number" min="0" step="1" value="0" required></label>
+        <label class="field"><span>Tarjetas para scrap *</span><input id="manualScrap" type="number" min="0" step="1" value="0" required></label>
+        <label class="field"><span>Acción inmediata *</span><textarea id="manualImmediateAction" rows="3" maxlength="500" required></textarea></label>
+        <label class="field"><span>Departamento que atendió *</span><select id="manualDepartment" required></select></label>
+        <label class="field"><span>Soporte que cierra *</span><input id="manualSupport" type="text" readonly required></label>
+      </div>
+      <div class="ticket-action-requirements hidden" id="manualActionRequirements">
+        <strong>Se requieren acciones de seguimiento</strong>
+        <p id="manualActionReason">Aplica por más de 5 tarjetas para retrabajo, 1 o más para scrap, o más de 30 minutos de paro.</p>
+        <div class="ticket-actions-grid">
+          <fieldset><legend>Acción de contención *</legend><textarea id="manualContainment" rows="2" maxlength="500"></textarea><label class="field"><span>Fecha de cierre *</span><input id="manualContainmentDue" type="date"></label><label class="field"><span>Owner *</span><select id="manualContainmentOwner"><option value="">Seleccionar owner</option></select></label></fieldset>
+          <fieldset><legend>Acción correctiva *</legend><textarea id="manualCorrective" rows="2" maxlength="500"></textarea><label class="field"><span>Fecha de cierre *</span><input id="manualCorrectiveDue" type="date"></label><label class="field"><span>Owner *</span><select id="manualCorrectiveOwner"><option value="">Seleccionar owner</option></select></label></fieldset>
+          <fieldset><legend>Acción sistemática *</legend><textarea id="manualPreventive" rows="2" maxlength="500"></textarea><label class="field"><span>Fecha de cierre *</span><input id="manualPreventiveDue" type="date"></label><label class="field"><span>Owner *</span><select id="manualPreventiveOwner"><option value="">Seleccionar owner</option></select></label></fieldset>
+        </div>
+      </div>
+      <p class="auth-message" id="manualDowntimeMessage" role="status"></p>
+      <div class="dialog-actions">
+        <button class="button ghost" id="cancelManualDowntimeAction" type="button">Cancelar</button>
+        <button class="button primary" type="submit">Guardar captura de paro</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="ticketUserLoginDialog" class="confirm-dialog" aria-labelledby="ticketUserLoginTitle">
+    <form id="ticketUserLoginForm" novalidate>
+      <div class="dialog-icon">ID</div>
+      <h2 id="ticketUserLoginTitle">Identificación para ticket</h2>
+      <p id="ticketUserLoginDescription">Ingresa tu usuario y contraseña.</p>
+      <label class="field"><span>Usuario</span><input id="ticketLoginUsername" type="text" autocomplete="username" required></label>
+      <label class="field"><span>Contraseña</span><input id="ticketLoginPassword" type="password" autocomplete="current-password" required></label>
+      <p class="auth-message" id="ticketUserLoginMessage" role="status"></p>
+      <div class="dialog-actions">
+        <button class="button ghost" id="cancelTicketUserLogin" type="button">Cancelar</button>
+        <button class="button ghost" id="openChangeTicketPassword" type="button">Cambiar contraseña</button>
+        <button class="button primary" type="submit">Continuar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="changeTicketPasswordDialog" class="confirm-dialog" aria-labelledby="changeTicketPasswordTitle">
+    <form id="changeTicketPasswordForm" novalidate>
+      <div class="dialog-icon">ID</div>
+      <h2 id="changeTicketPasswordTitle">Cambiar contraseña</h2>
+      <p>Confirma tu identidad y registra una contraseña nueva para tu cuenta.</p>
+      <label class="field"><span>Usuario</span><input id="changeTicketPasswordUsername" type="text" autocomplete="username" required></label>
+      <label class="field"><span>Contraseña actual</span><input id="changeTicketCurrentPassword" type="password" autocomplete="current-password" required></label>
+      <label class="field"><span>Nueva contraseña (mínimo 8 caracteres)</span><input id="changeTicketNewPassword" type="password" minlength="8" autocomplete="new-password" required></label>
+      <label class="field"><span>Confirmar nueva contraseña</span><input id="changeTicketPasswordConfirmation" type="password" minlength="8" autocomplete="new-password" required></label>
+      <p class="auth-message" id="changeTicketPasswordMessage" role="status"></p>
+      <div class="dialog-actions">
+        <button class="button ghost" id="cancelChangeTicketPassword" type="button">Cancelar</button>
+        <button class="button primary" type="submit">Guardar contraseña</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="editTicketUserDialog" class="confirm-dialog" aria-labelledby="editTicketUserTitle">
+    <form id="editTicketUserForm" novalidate>
+      <div class="dialog-icon">ID</div>
+      <h2 id="editTicketUserTitle">Editar usuario</h2>
+      <label class="field"><span>Nombre completo</span><input id="editTicketUserName" type="text" maxlength="100" required></label>
+      <label class="field"><span>Usuario</span><input id="editTicketUsername" type="text" maxlength="100" autocomplete="username" required></label>
+      <label class="field"><span>Rol</span><select id="editTicketUserRole" required><option value="operator">Operador · abrir tickets</option><option value="support">Soporte · abrir y cerrar tickets</option></select></label>
+      <p class="catalog-help">La contraseña actual se conserva. Para cambiarla, usa “Cambiar contraseña” al autenticarte.</p>
+      <p class="auth-message" id="editTicketUserMessage" role="status"></p>
+      <div class="dialog-actions">
+        <button class="button ghost" id="cancelEditTicketUser" type="button">Cancelar</button>
+        <button class="button primary" type="submit">Guardar cambios</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="catalogAccessDialog" class="confirm-dialog" aria-labelledby="catalogAccessTitle">
+    <form id="catalogAccessForm" novalidate>
+      <div class="dialog-icon">NIP</div>
+      <h2 id="catalogAccessTitle">Acceso a catálogos</h2>
+      <p>Ingresa el NIP de 4 dígitos para consultar y modificar los catálogos.</p>
+      <label class="field"><span>NIP</span><input id="catalogAccessPin" type="password" inputmode="numeric" autocomplete="one-time-code" maxlength="4" pattern="[0-9]{4}" required></label>
+      <p class="auth-message" id="catalogAccessMessage" role="status"></p>
+      <div class="dialog-actions">
+        <button class="button ghost" id="cancelCatalogAccess" type="button">Cancelar</button>
+        <button class="button primary" type="submit">Ingresar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div class="toast-stack" id="toastStack" aria-live="polite"></div>
+
+  <dialog id="confirmDialog" class="confirm-dialog">
+    <form method="dialog">
+      <div class="dialog-icon">!</div>
+      <h2 id="dialogTitle">Confirmar acción</h2>
+      <p id="dialogMessage">Esta acción no se puede deshacer.</p>
+      <div class="dialog-actions">
+        <button class="button ghost" value="cancel">Cancelar</button>
+        <button class="button danger" id="dialogConfirm" value="confirm">Confirmar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="data.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://alcdn.msauth.net/browser/2.4.0/js/msal-browser.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
